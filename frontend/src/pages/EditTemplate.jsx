@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTemplateById, updateTemplate } from '../api/templateApi';
 import HtmlEditor from '../components/HtmlEditor';
+import { useTheme } from '../context/ThemeContext';
+import { Field, GlassInput, GhostBtn, PrimaryBtn, AccentBtn } from './_formComponents';
 
 /**
- * EditTemplate Page
- *
- * Pre-loads an existing template by ID from the URL param (:id),
- * then allows the user to update name, subject, and HTML content.
- * On submit → PUT /api/templates/:id → redirect to template list.
+ * EditTemplate — pre-loads an existing template and lets the user update it.
+ * PUT /api/templates/:id → redirect to list on success.
  */
 const EditTemplate = () => {
+  const { theme } = useTheme();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -19,224 +19,134 @@ const EditTemplate = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Load existing template data on mount
+  // Pre-fill form with existing template data
   useEffect(() => {
-    const fetchTemplate = async () => {
+    const fetch = async () => {
       try {
         const data = await getTemplateById(id);
         const t = data.data;
         setForm({ name: t.name, subject: t.subject, htmlContent: t.htmlContent });
-      } catch (err) {
+      } catch {
         setError('Failed to load template. It may not exist.');
       } finally {
         setLoading(false);
       }
     };
-    fetchTemplate();
+    fetch();
   }, [id]);
 
-  const handleChange = (field) => (e) => {
+  const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
-  };
-
-  const handleHtmlChange = (value) => {
-    setForm((prev) => ({ ...prev, htmlContent: value }));
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
     if (!form.name.trim() || !form.subject.trim() || !form.htmlContent.trim()) {
       setError('All fields are required.');
       return;
     }
-
     try {
       setSubmitting(true);
       await updateTemplate(id, form);
       navigate('/');
     } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to update template.';
-      setError(msg);
+      setError(err.response?.data?.message || 'Failed to update template.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ── Loading spinner ─────────────────────────────────────────
   if (loading) {
-    return <div style={styles.center}>Loading template...</div>;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '16px' }}>
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '50%',
+          border: `3px solid ${theme.border}`,
+          borderTopColor: theme.accent,
+          animation: 'spinBorder 0.8s linear infinite',
+        }} />
+        <p style={{ color: theme.textMuted, fontSize: '14px' }}>Loading template...</p>
+      </div>
+    );
   }
 
   return (
-    <div style={styles.container}>
-      {/* Page header */}
-      <div style={styles.header}>
-        <button style={styles.backBtn} onClick={() => navigate('/')}>
-          ← Back
-        </button>
-        <h1 style={styles.title}>Edit Template</h1>
+    <div style={{ maxWidth: '860px', margin: '0 auto', padding: '40px 24px' }}
+         className="fade-slide-up">
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '28px' }}>
+        <GhostBtn onClick={() => navigate('/')} theme={theme}>← Back</GhostBtn>
+        <div>
+          <h1 style={{ fontSize: '26px', fontWeight: '800', color: theme.textPrimary, letterSpacing: '-0.4px' }}>
+            Edit Template
+          </h1>
+          <p style={{ fontSize: '13px', color: theme.textMuted, marginTop: '3px' }}>
+            Update HTML content, subject, or name
+          </p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={styles.form}>
-        {error && <div style={styles.errorBanner}>{error}</div>}
+      {/* ── Glass Form Card ─────────────────────────────────── */}
+      <form
+        onSubmit={handleSubmit}
+        className="glass"
+        style={{
+          backgroundColor: theme.bgGlass,
+          backdropFilter: theme.blur,
+          WebkitBackdropFilter: theme.blur,
+          borderRadius: '20px',
+          border: `1px solid ${theme.border}`,
+          boxShadow: theme.shadowCard,
+          padding: '32px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px',
+        }}
+      >
+        {error && (
+          <div style={{
+            backgroundColor: theme.error,
+            border: `1px solid ${theme.errorBorder}`,
+            borderRadius: '10px',
+            padding: '12px 16px',
+            color: theme.errorText,
+            fontSize: '13px',
+          }}>
+            ⚠ {error}
+          </div>
+        )}
 
-        {/* Template Name */}
-        <div style={styles.fieldGroup}>
-          <label style={styles.label}>Template Name *</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={handleChange('name')}
-            style={styles.input}
-          />
+        {/* Name + Subject row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <Field label="Template Name *" theme={theme}>
+            <GlassInput value={form.name} onChange={handleChange('name')} placeholder="Template name" theme={theme} />
+          </Field>
+          <Field label="Email Subject *" theme={theme}>
+            <GlassInput value={form.subject} onChange={handleChange('subject')} placeholder="Email subject" theme={theme} />
+          </Field>
         </div>
 
-        {/* Subject Line */}
-        <div style={styles.fieldGroup}>
-          <label style={styles.label}>Email Subject *</label>
-          <input
-            type="text"
-            value={form.subject}
-            onChange={handleChange('subject')}
-            style={styles.input}
-          />
-        </div>
+        {/* HTML editor */}
+        <HtmlEditor
+          value={form.htmlContent}
+          onChange={(val) => setForm((p) => ({ ...p, htmlContent: val }))}
+        />
 
-        {/* HTML Editor */}
-        <div style={styles.fieldGroup}>
-          <HtmlEditor value={form.htmlContent} onChange={handleHtmlChange} />
-        </div>
-
-        <div style={styles.actions}>
-          <button type="button" onClick={() => navigate('/')} style={styles.cancelBtn}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/preview/${id}`)}
-            style={styles.previewBtn}
-          >
-            Preview
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{ ...styles.submitBtn, opacity: submitting ? 0.7 : 1 }}
-          >
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '4px' }}>
+          <GhostBtn onClick={() => navigate('/')} theme={theme}>Cancel</GhostBtn>
+          <AccentBtn onClick={() => navigate(`/preview/${id}`)} theme={theme}>
+            👁 Preview
+          </AccentBtn>
+          <PrimaryBtn type="submit" disabled={submitting} theme={theme}>
             {submitting ? 'Saving...' : 'Save Changes'}
-          </button>
+          </PrimaryBtn>
         </div>
       </form>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '860px',
-    margin: '0 auto',
-    padding: '32px 24px',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-    marginBottom: '28px',
-  },
-  backBtn: {
-    background: 'none',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    padding: '7px 14px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    color: '#374151',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#111827',
-  },
-  form: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    border: '1px solid #e5e7eb',
-    padding: '28px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-  },
-  fieldGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  label: {
-    fontWeight: '600',
-    fontSize: '14px',
-    color: '#374151',
-  },
-  input: {
-    padding: '10px 14px',
-    border: '1px solid #d1d5db',
-    borderRadius: '8px',
-    fontSize: '14px',
-    outline: 'none',
-    color: '#111827',
-    backgroundColor: '#fff',
-  },
-  errorBanner: {
-    backgroundColor: '#fef2f2',
-    border: '1px solid #fecaca',
-    borderRadius: '8px',
-    padding: '12px 16px',
-    color: '#dc2626',
-    fontSize: '14px',
-  },
-  actions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '12px',
-    paddingTop: '8px',
-  },
-  cancelBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f9fafb',
-    border: '1px solid #d1d5db',
-    borderRadius: '8px',
-    fontSize: '14px',
-    cursor: 'pointer',
-    color: '#374151',
-  },
-  previewBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#ede9fe',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    color: '#7c3aed',
-  },
-  submitBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#4f46e5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  center: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '200px',
-    fontSize: '16px',
-    color: '#6b7280',
-  },
 };
 
 export default EditTemplate;
